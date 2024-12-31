@@ -12,6 +12,7 @@ import (
 
 type APIServer struct {
 	listenAddr string
+	store      Storage
 }
 
 type apiFunc func(http.ResponseWriter, *http.Request) error
@@ -21,8 +22,8 @@ type ApiError struct {
 }
 
 func WriteJSON(w http.ResponseWriter, status int, v any) error {
+	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(status)
-	w.Header().Set("Content-Type", "application/json")
 	return json.NewEncoder(w).Encode(v)
 }
 
@@ -34,17 +35,20 @@ func makeHTTPHandleFunc(f apiFunc) http.HandlerFunc {
 	}
 }
 
-func NewAPIServer(listenAddr string) *APIServer {
+func NewAPIServer(listenAddr string, store Storage) *APIServer {
 	return &APIServer{
 		listenAddr: listenAddr,
+		store:      store,
 	}
 }
 
 func (s *APIServer) Run() {
 	router := mux.NewRouter()
 
-	router.HandleFunc("/user", makeHTTPHandleFunc(s.handleUser))
 	router.HandleFunc("/", makeHTTPHandleFunc(s.handleRoot))
+
+	router.HandleFunc("/user", makeHTTPHandleFunc(s.handleUser))
+	router.HandleFunc("/user/{id}", makeHTTPHandleFunc(s.handleGetUser))
 
 	log.Println("JSON API server running on port: ", s.listenAddr)
 
@@ -72,20 +76,26 @@ func (s *APIServer) handleUser(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *APIServer) handleCreateUser(w http.ResponseWriter, r *http.Request) error {
+	name := r.Header["Name"][0]
+	lastName := r.Header["LastName"][0]
+	nickName := r.Header["NickName"][0]
+	user := NewUser(name, lastName, nickName)
 
-	// test
-	names := r.Header["Name"]
-	for k, v := range names {
-		fmt.Printf("%v: %v\n", k, v)
+	err := s.store.CreateUser(user)
+	if err != nil {
+		return err
 	}
+
 	return nil
 }
 
 func (s *APIServer) handleGetUser(w http.ResponseWriter, r *http.Request) error {
+	vars := mux.Vars(r)
+	id := vars["id"]
 
-	// test
-	account := NewUser("Luiz", "Scarsi", "Salnas")
-	return WriteJSON(w, http.StatusOK, account)
+	fmt.Printf("id: %v\n", id)
+
+	return WriteJSON(w, http.StatusOK, vars)
 }
 
 func (s *APIServer) handleDeleteUser(w http.ResponseWriter, r *http.Request) error {

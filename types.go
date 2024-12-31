@@ -3,10 +3,10 @@ package main
 import "math/rand"
 
 type User struct {
-	ID int
-	FirstName string
-	LastName string
-	NickName string
+	ID int `json:"id"`
+	FirstName string `json:"firstName"`
+	LastName string `json:"lastName"`
+	NickName string `json:"nickName"`
 }
 
 func NewUser(firstName, lastName, nickName string) *User {
