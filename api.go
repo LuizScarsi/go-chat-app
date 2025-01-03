@@ -76,9 +76,24 @@ func (s *APIServer) handleUser(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *APIServer) handleCreateUser(w http.ResponseWriter, r *http.Request) error {
-	name := r.Header["Name"][0]
-	lastName := r.Header["LastName"][0]
-	nickName := r.Header["NickName"][0]
+	nameArr, okName := r.Header["Name"]
+	var name string
+	if okName != false {
+		name = nameArr[0]
+	}
+
+	lastNameArr, okLastName := r.Header["Lastname"]
+	var lastName string
+	if okLastName != false {
+		lastName = lastNameArr[0]
+	}
+
+	nickNameArr, okNickName := r.Header["Nickname"]
+	var nickName string
+	if okNickName != false {
+		nickName = nickNameArr[0]
+	}
+
 	user := NewUser(name, lastName, nickName)
 
 	err := s.store.CreateUser(user)
@@ -86,7 +101,7 @@ func (s *APIServer) handleCreateUser(w http.ResponseWriter, r *http.Request) err
 		return err
 	}
 
-	return nil
+	return WriteJSON(w, http.StatusOK, user)
 }
 
 func (s *APIServer) handleGetUser(w http.ResponseWriter, r *http.Request) error {
