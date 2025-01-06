@@ -47,8 +47,8 @@ func (s *APIServer) Run() {
 
 	router.HandleFunc("/", makeHTTPHandleFunc(s.handleRoot))
 
-	router.HandleFunc("/user", makeHTTPHandleFunc(s.handleUser))
-	router.HandleFunc("/user/{id}", makeHTTPHandleFunc(s.handleGetUser))
+	router.HandleFunc("/account", makeHTTPHandleFunc(s.handleAccount))
+	router.HandleFunc("/account/{id}", makeHTTPHandleFunc(s.handleGetAccount))
 
 	log.Println("JSON API server running on port: ", s.listenAddr)
 
@@ -61,25 +61,25 @@ func (s *APIServer) handleRoot(w http.ResponseWriter, r *http.Request) error {
 	return err
 }
 
-func (s *APIServer) handleUser(w http.ResponseWriter, r *http.Request) error {
+func (s *APIServer) handleAccount(w http.ResponseWriter, r *http.Request) error {
 	if r.Method == "GET" {
-		return s.handleGetUser(w, r)
+		return s.handleGetAccount(w, r)
 	}
 	if r.Method == "POST" {
-		return s.handleCreateUser(w, r)
+		return s.handleCreateAccount(w, r)
 	}
 	if r.Method == "DELETE" {
-		return s.handleDeleteUser(w, r)
+		return s.handleDeleteAccount(w, r)
 	}
 
 	return fmt.Errorf("method not allowed %s", r.Method)
 }
 
-func (s *APIServer) handleCreateUser(w http.ResponseWriter, r *http.Request) error {
-	nameArr, okName := r.Header["Name"]
-	var name string
+func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) error {
+	firstNameArr, okName := r.Header["Firstname"]
+	var firstName string
 	if okName != false {
-		name = nameArr[0]
+		firstName = firstNameArr[0]
 	}
 
 	lastNameArr, okLastName := r.Header["Lastname"]
@@ -94,17 +94,19 @@ func (s *APIServer) handleCreateUser(w http.ResponseWriter, r *http.Request) err
 		nickName = nickNameArr[0]
 	}
 
-	user := NewUser(name, lastName, nickName)
+	// accType := "free"
 
-	err := s.store.CreateUser(user)
+	account := NewAccount(firstName, lastName, nickName)
+
+	err := s.store.CreateAccount(account)
 	if err != nil {
 		return err
 	}
 
-	return WriteJSON(w, http.StatusOK, user)
+	return WriteJSON(w, http.StatusOK, account)
 }
 
-func (s *APIServer) handleGetUser(w http.ResponseWriter, r *http.Request) error {
+func (s *APIServer) handleGetAccount(w http.ResponseWriter, r *http.Request) error {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
@@ -113,6 +115,6 @@ func (s *APIServer) handleGetUser(w http.ResponseWriter, r *http.Request) error 
 	return WriteJSON(w, http.StatusOK, vars)
 }
 
-func (s *APIServer) handleDeleteUser(w http.ResponseWriter, r *http.Request) error {
+func (s *APIServer) handleDeleteAccount(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }

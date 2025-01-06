@@ -9,10 +9,10 @@ import (
 )
 
 type Storage interface {
-	CreateUser(*User) error
-	DeleteUser(int) error
-	UpdateUser(*User) error
-	GetUserByID(int) (*User, error)
+	CreateAccount(*Account) error
+	UpdateAccount(*Account) error
+	DeleteAccount(int) error
+	GetAccountByID(int) (*Account, error)
 }
 
 type PostgresStore struct {
@@ -42,39 +42,40 @@ func NewPostgresStore() (*PostgresStore, error) {
 }
 
 func (s *PostgresStore) Init() error {
-	return s.CreateUserTable()
+	return s.CreateAccountTable()
 }
 
-func (s *PostgresStore) CreateUserTable() error {
-	query := `create table if not exists users (
-		id serial primary key,
+func (s *PostgresStore) CreateAccountTable() error {
+	query := `create table if not exists accounts (
+		account_id serial primary key,
 		first_name varchar(50),
 		last_name varchar(50),
-		nick_name varchar(50)
+		nick_name varchar(50),
+		created_at timestamp default current_timestamp
 	)`
-	result, err := s.db.Exec(query)
 
-	fmt.Println(result)
+	_, err := s.db.Exec(query)
 	return err
 }
 
-func (s *PostgresStore) CreateUser(user *User) error {
-	fmt.Println("Creating user...")
-	fmt.Println(user.FirstName)
-	query := fmt.Sprintf("insert into users (id, first_name, last_name, nick_name) values (%v, '%v', '%v', '%v')", user.ID, user.FirstName, user.LastName, user.NickName)
-	result, err := s.db.Exec(query)
-	fmt.Println(result)
+func (s *PostgresStore) CreateAccount(acc *Account) error {
+	query := fmt.Sprintf(`insert into accounts
+		(account_id, first_name, last_name, nick_name)
+		values (%v, '%v', '%v', '%v')`,
+		acc.AccountID, acc.FirstName, acc.LastName, acc.NickName)
+
+	_, err := s.db.Exec(query)
 	return err
 }
 
-func (s *PostgresStore) UpdateUser(*User) error {
+func (s *PostgresStore) UpdateAccount(*Account) error {
 	return nil
 }
 
-func (s *PostgresStore) DeleteUser(id int) error {
+func (s *PostgresStore) DeleteAccount(id int) error {
 	return nil
 }
 
-func (s *PostgresStore) GetUserByID(id int) (*User, error) {
+func (s *PostgresStore) GetAccountByID(id int) (*Account, error) {
 	return nil, nil
 }
