@@ -1,7 +1,6 @@
 package main
 
 import (
-	"math/rand"
 	"time"
 )
 
@@ -14,7 +13,7 @@ type CreateAccountRequest struct {
 }
 
 type Account struct {
-	AccountID int `json:"id"`
+	AccountID int `json:"accountId"`
 	// Login        string    `json:"login"`
 	// PasswordHash string    `json:"passwordHash"`
 	FirstName string `json:"firstName"`
@@ -26,7 +25,6 @@ type Account struct {
 
 func NewAccount(firstName, lastName, nickName string) *Account {
 	return &Account{
-		AccountID: rand.Intn(10000),
 		FirstName: firstName,
 		LastName:  lastName,
 		NickName:  nickName,

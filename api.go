@@ -48,7 +48,7 @@ func (s *APIServer) Run() {
 	router.HandleFunc("/", makeHTTPHandleFunc(s.handleRoot))
 
 	router.HandleFunc("/account", makeHTTPHandleFunc(s.handleAccount))
-	router.HandleFunc("/account/{id}", makeHTTPHandleFunc(s.handleGetAccount))
+	router.HandleFunc("/account/{id}", makeHTTPHandleFunc(s.handleGetAccountByID))
 
 	log.Println("JSON API server running on port: ", s.listenAddr)
 
@@ -76,27 +76,13 @@ func (s *APIServer) handleAccount(w http.ResponseWriter, r *http.Request) error 
 }
 
 func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) error {
-	firstNameArr, okName := r.Header["Firstname"]
-	var firstName string
-	if okName != false {
-		firstName = firstNameArr[0]
-	}
-
-	lastNameArr, okLastName := r.Header["Lastname"]
-	var lastName string
-	if okLastName != false {
-		lastName = lastNameArr[0]
-	}
-
-	nickNameArr, okNickName := r.Header["Nickname"]
-	var nickName string
-	if okNickName != false {
-		nickName = nickNameArr[0]
+	createAccountReq := new(CreateAccountRequest)
+	if err := json.NewDecoder(r.Body).Decode(createAccountReq); err != nil {
+		return err
 	}
 
 	// accType := "free"
-
-	account := NewAccount(firstName, lastName, nickName)
+	account := NewAccount(createAccountReq.FirstName, createAccountReq.LastName, createAccountReq.NickName)
 
 	err := s.store.CreateAccount(account)
 	if err != nil {
@@ -107,6 +93,15 @@ func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *APIServer) handleGetAccount(w http.ResponseWriter, r *http.Request) error {
+	accounts, err := s.store.GetAccounts()
+	if err != nil {
+		return err
+	}
+
+	return WriteJSON(w, http.StatusOK, accounts)
+}
+
+func (s *APIServer) handleGetAccountByID(w http.ResponseWriter, r *http.Request) error {
 	vars := mux.Vars(r)
 	id := vars["id"]
 

@@ -13,6 +13,7 @@ type Storage interface {
 	UpdateAccount(*Account) error
 	DeleteAccount(int) error
 	GetAccountByID(int) (*Account, error)
+	GetAccounts() ([]*Account, error)
 }
 
 type PostgresStore struct {
@@ -59,13 +60,20 @@ func (s *PostgresStore) CreateAccountTable() error {
 }
 
 func (s *PostgresStore) CreateAccount(acc *Account) error {
-	query := fmt.Sprintf(`insert into accounts
-		(account_id, first_name, last_name, nick_name)
-		values (%v, '%v', '%v', '%v')`,
-		acc.AccountID, acc.FirstName, acc.LastName, acc.NickName)
+	query := `insert into accounts
+		(first_name, last_name, nick_name)
+		values ($1, $2, $3)`
 
-	_, err := s.db.Exec(query)
-	return err
+	_, err := s.db.Exec(query,
+		acc.FirstName,
+		acc.LastName,
+		acc.NickName,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *PostgresStore) UpdateAccount(*Account) error {
@@ -78,4 +86,30 @@ func (s *PostgresStore) DeleteAccount(id int) error {
 
 func (s *PostgresStore) GetAccountByID(id int) (*Account, error) {
 	return nil, nil
+}
+
+func (s *PostgresStore) GetAccounts() ([]*Account, error) {
+	rows, err := s.db.Query("select * from accounts")
+	if err != nil {
+		return nil, err
+	}
+
+	accounts := []*Account{}
+	for rows.Next() {
+		account := new(Account)
+		err := rows.Scan(
+			&account.AccountID,
+			&account.FirstName,
+			&account.LastName,
+			&account.NickName,
+			&account.CreatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		accounts = append(accounts, account)
+	}
+
+	return accounts, nil
 }
