@@ -4,16 +4,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/gorilla/mux"
+	"golang.org/x/net/websocket"
 )
 
 type APIServer struct {
 	listenAddr string
 	store      Storage
+}
+
+type WsServer struct {
+	conns  map[*websocket.Conn]bool
+	wsPort string
 }
 
 type apiFunc func(http.ResponseWriter, *http.Request) error
@@ -43,17 +50,32 @@ func NewAPIServer(listenAddr string, store Storage) *APIServer {
 	}
 }
 
+func NewWsServer(wsPort string) *WsServer {
+	return &WsServer{
+		conns:  make(map[*websocket.Conn]bool),
+		wsPort: wsPort,
+	}
+}
+
 func (s *APIServer) Run() {
 	router := mux.NewRouter()
 
 	router.HandleFunc("/", makeHTTPHandleFunc(s.handleRoot))
-
 	router.HandleFunc("/account", makeHTTPHandleFunc(s.handleAccount))
 	router.HandleFunc("/account/{id}", makeHTTPHandleFunc(s.handleByID))
+	// router.HandleFunc("/chat", makeHTTPHandleFunc(s.handleChat))
+	// router.HandleFunc("/chat", s.handleChat)
+	// go handleMessages()
 
 	log.Println("JSON API server running on port: ", s.listenAddr)
 
 	http.ListenAndServe(s.listenAddr, router)
+}
+
+func (s *WsServer) Run() {
+	http.Handle("/ws", websocket.Handler(s.handleWS))
+	log.Println("Websocket running on port: ", s.wsPort)
+	http.ListenAndServe(s.wsPort, nil)
 }
 
 func (s *APIServer) handleRoot(w http.ResponseWriter, r *http.Request) error {
@@ -61,6 +83,88 @@ func (s *APIServer) handleRoot(w http.ResponseWriter, r *http.Request) error {
 	err := t.Execute(w, "teste")
 	return err
 }
+
+func (s *WsServer) handleWS(ws *websocket.Conn) {
+	fmt.Println("new ws connection comming from client: ", ws.RemoteAddr())
+
+	//protect with mutex
+	s.conns[ws] = true
+	s.readLoop(ws)
+}
+
+func (s *WsServer) readLoop(ws *websocket.Conn) {
+	buf := make([]byte, 1024)
+	for {
+		n, err := ws.Read(buf)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			fmt.Println("ws read error: ", err)
+			continue
+		}
+		msg := buf[:n]
+		fmt.Println(string(msg))
+		ws.Write([]byte("Thank you for the message!"))
+	}
+}
+
+// var upgrader = websocket.Upgrader{
+// 	// implement security checks
+// 	CheckOrigin: func(r *http.Request) bool {
+// 		return true
+// 	},
+// 	ReadBufferSize:  1024,
+// 	WriteBufferSize: 1024,
+// }
+
+// var clients = make(map[*websocket.Conn]bool)
+// var broadcast = make(chan ChatMessageRequest)
+
+// func (s *APIServer) handleChat(w http.ResponseWriter, r *http.Request) {
+// 	conn, err := upgrader.Upgrade(w, r, nil)
+// 	if err != nil {
+// 		fmt.Println(err)
+// 		// return err
+// 	}
+// 	defer conn.Close()
+
+// 	s.conns[conn] = true
+
+// 	for {
+// 		var messageReq ChatMessageRequest
+// 		if err := conn.ReadJSON(&messageReq); err != nil {
+// 			delete(s.conns, conn)
+// 			fmt.Println(err)
+// 			// return err
+// 		}
+// 		broadcast <- messageReq
+// 	}
+// 	// for {
+// 	// 	messageType, p, err := conn.ReadMessage()
+// 	// 	if err != nil {
+// 	// 		return err
+// 	// 	}
+// 	// 	if err := conn.WriteMessage(messageType, p); err != nil {
+// 	// 		return err
+// 	// 	}
+// 	// }
+// }
+
+// func handleMessages() {
+// 	for {
+// 		msg := <-broadcast
+// 		fmt.Println("printing message received from broadcast")
+// 		fmt.Println(msg.Message)
+// 		for client := range clients {
+// 			if err := client.WriteJSON(msg); err != nil {
+// 				log.Fatal(err)
+// 				client.Close()
+// 				delete(clients, client)
+// 			}
+// 		}
+// 	}
+// }
 
 func (s *APIServer) handleAccount(w http.ResponseWriter, r *http.Request) error {
 	if r.Method == "GET" {

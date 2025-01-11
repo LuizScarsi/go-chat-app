@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 
@@ -18,12 +17,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("%+v", store)
 
 	if err := store.Init(); err != nil {
 		log.Fatal(err)
 	}
 
 	server := NewAPIServer(os.Getenv("SERVER_PORT"), store)
-	server.Run()
+	ws := NewWsServer(os.Getenv("WS_PORT"))
+	go server.Run()
+	ws.Run()
+
+	// select {}
 }

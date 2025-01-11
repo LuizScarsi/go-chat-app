@@ -4,6 +4,15 @@ import (
 	"time"
 )
 
+type ChatMessageRequest struct {
+	Message string `json:"message"`
+}
+
+type ChatMessage struct {
+	NickName string `json:"nickName"`
+	Message  string `json:"message"`
+}
+
 type CreateAccountRequest struct {
 	// AccountType string `json:"accountType"`
 	FirstName string `json:"firstName"`
