@@ -100,12 +100,23 @@ func (s *WsServer) readLoop(ws *websocket.Conn) {
 			if err == io.EOF {
 				break
 			}
-			fmt.Println("ws read error: ", err)
+			fmt.Println("ws read error:", err)
 			continue
 		}
 		msg := buf[:n]
-		fmt.Println(string(msg))
-		ws.Write([]byte("Thank you for the message!"))
+
+		s.broadcast(msg)
+		fmt.Println(msg)
+	}
+}
+
+func (s *WsServer) broadcast(b []byte) {
+	for ws := range s.conns {
+		go func(ws *websocket.Conn) {
+			if _, err := ws.Write(b); err != nil {
+				fmt.Println("write error:", err)
+			}
+		}(ws)
 	}
 }
 

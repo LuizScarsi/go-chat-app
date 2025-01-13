@@ -24,8 +24,7 @@ func main() {
 
 	server := NewAPIServer(os.Getenv("SERVER_PORT"), store)
 	ws := NewWsServer(os.Getenv("WS_PORT"))
+
 	go server.Run()
 	ws.Run()
-
-	// select {}
 }
