@@ -4,23 +4,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
-	"golang.org/x/net/websocket"
 )
 
 type APIServer struct {
 	listenAddr string
 	store      Storage
-}
-
-type WsServer struct {
-	conns  map[*websocket.Conn]bool
-	wsPort string
 }
 
 type apiFunc func(http.ResponseWriter, *http.Request) error
@@ -50,32 +45,16 @@ func NewAPIServer(listenAddr string, store Storage) *APIServer {
 	}
 }
 
-func NewWsServer(wsPort string) *WsServer {
-	return &WsServer{
-		conns:  make(map[*websocket.Conn]bool),
-		wsPort: wsPort,
-	}
-}
-
 func (s *APIServer) Run() {
 	router := mux.NewRouter()
 
 	router.HandleFunc("/", makeHTTPHandleFunc(s.handleRoot))
 	router.HandleFunc("/account", makeHTTPHandleFunc(s.handleAccount))
-	router.HandleFunc("/account/{id}", makeHTTPHandleFunc(s.handleByID))
-	// router.HandleFunc("/chat", makeHTTPHandleFunc(s.handleChat))
-	// router.HandleFunc("/chat", s.handleChat)
-	// go handleMessages()
+	router.HandleFunc("/account/{id}", withJWTAuth(makeHTTPHandleFunc(s.handleByID)))
 
 	log.Println("JSON API server running on port: ", s.listenAddr)
 
 	http.ListenAndServe(s.listenAddr, router)
-}
-
-func (s *WsServer) Run() {
-	http.Handle("/ws", websocket.Handler(s.handleWS))
-	log.Println("Websocket running on port: ", s.wsPort)
-	http.ListenAndServe(s.wsPort, nil)
 }
 
 func (s *APIServer) handleRoot(w http.ResponseWriter, r *http.Request) error {
@@ -83,99 +62,6 @@ func (s *APIServer) handleRoot(w http.ResponseWriter, r *http.Request) error {
 	err := t.Execute(w, "teste")
 	return err
 }
-
-func (s *WsServer) handleWS(ws *websocket.Conn) {
-	fmt.Println("new ws connection comming from client: ", ws.RemoteAddr())
-
-	//protect with mutex
-	s.conns[ws] = true
-	s.readLoop(ws)
-}
-
-func (s *WsServer) readLoop(ws *websocket.Conn) {
-	buf := make([]byte, 1024)
-	for {
-		n, err := ws.Read(buf)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			fmt.Println("ws read error:", err)
-			continue
-		}
-		msg := buf[:n]
-
-		s.broadcast(msg)
-		fmt.Println(msg)
-	}
-}
-
-func (s *WsServer) broadcast(b []byte) {
-	for ws := range s.conns {
-		go func(ws *websocket.Conn) {
-			if _, err := ws.Write(b); err != nil {
-				fmt.Println("write error:", err)
-			}
-		}(ws)
-	}
-}
-
-// var upgrader = websocket.Upgrader{
-// 	// implement security checks
-// 	CheckOrigin: func(r *http.Request) bool {
-// 		return true
-// 	},
-// 	ReadBufferSize:  1024,
-// 	WriteBufferSize: 1024,
-// }
-
-// var clients = make(map[*websocket.Conn]bool)
-// var broadcast = make(chan ChatMessageRequest)
-
-// func (s *APIServer) handleChat(w http.ResponseWriter, r *http.Request) {
-// 	conn, err := upgrader.Upgrade(w, r, nil)
-// 	if err != nil {
-// 		fmt.Println(err)
-// 		// return err
-// 	}
-// 	defer conn.Close()
-
-// 	s.conns[conn] = true
-
-// 	for {
-// 		var messageReq ChatMessageRequest
-// 		if err := conn.ReadJSON(&messageReq); err != nil {
-// 			delete(s.conns, conn)
-// 			fmt.Println(err)
-// 			// return err
-// 		}
-// 		broadcast <- messageReq
-// 	}
-// 	// for {
-// 	// 	messageType, p, err := conn.ReadMessage()
-// 	// 	if err != nil {
-// 	// 		return err
-// 	// 	}
-// 	// 	if err := conn.WriteMessage(messageType, p); err != nil {
-// 	// 		return err
-// 	// 	}
-// 	// }
-// }
-
-// func handleMessages() {
-// 	for {
-// 		msg := <-broadcast
-// 		fmt.Println("printing message received from broadcast")
-// 		fmt.Println(msg.Message)
-// 		for client := range clients {
-// 			if err := client.WriteJSON(msg); err != nil {
-// 				log.Fatal(err)
-// 				client.Close()
-// 				delete(clients, client)
-// 			}
-// 		}
-// 	}
-// }
 
 func (s *APIServer) handleAccount(w http.ResponseWriter, r *http.Request) error {
 	if r.Method == "GET" {
@@ -202,6 +88,41 @@ func (s *APIServer) handleByID(w http.ResponseWriter, r *http.Request) error {
 	return fmt.Errorf("method not allowed %s", r.Method)
 }
 
+func withJWTAuth(handlerfunc http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("calling JWT Auth middleware")
+		tokenStr := r.Header.Get("x-jwt-token")
+		_, err := validateJWT(tokenStr)
+		if err != nil {
+			WriteJSON(w, http.StatusForbidden, ApiError{Error: "invalid token"})
+			return
+		}
+		handlerfunc(w, r)
+	}
+}
+
+func createJWT(account *Account) (string, error) {
+	claims := &jwt.MapClaims{
+		"expiresAt": 15000,
+		"accountID": account.AccountID,
+	}
+
+	secret := os.Getenv("JWT_SECRET")
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	return token.SignedString([]byte(secret))
+}
+
+func validateJWT(tokenStr string) (*jwt.Token, error) {
+	secret := os.Getenv("JWT_SECRET")
+	return jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(secret), nil
+	})
+}
+
 func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) error {
 	createAccountReq := new(CreateAccountRequest)
 	if err := json.NewDecoder(r.Body).Decode(createAccountReq); err != nil {
@@ -214,6 +135,12 @@ func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		return err
 	}
+
+	tokenStr, err := createJWT(account)
+	if err != nil {
+		return err
+	}
+	fmt.Println("jwt token str: ", tokenStr)
 
 	return WriteJSON(w, http.StatusOK, account)
 }
